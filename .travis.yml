@@ -13,7 +13,6 @@ before_script:
 
 script:
   - make lint
-  - make test
   - make test-coverage
 
 after_script:
