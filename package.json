@@ -22,6 +22,10 @@
   "bin": {
     "page-loader": "dist/bin/page-loader.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/koshkarik/project-lvl3-s194"
+  },
   "dependencies": {
     "axios": "^0.18.0",
     "commander": "^2.15.0",
