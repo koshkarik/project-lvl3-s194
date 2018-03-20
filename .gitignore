@@ -2,3 +2,4 @@
 *.log
 dist
 var
+.DS_Store
