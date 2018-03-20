@@ -3,3 +3,4 @@
 dist
 var
 .DS_Store
+coverage
