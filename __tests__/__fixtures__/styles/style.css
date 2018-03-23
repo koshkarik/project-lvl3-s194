@@ -1,0 +1,13 @@
+h1 {
+  font-size: 80px;
+  color: gold;
+  text-align: center;
+}
+
+p {
+  line-height: 0.8em;
+}
+
+.container {
+  background-color: #f7f7f7;
+}
