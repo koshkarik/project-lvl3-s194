@@ -32,7 +32,6 @@ test('download page and save it', async () => {
   const tmpFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'bar-'));
   await saveData(tmpFolder, host);
   const pathToFile = path.join(tmpFolder, 'fake-com.html');
-  console.log(pathToFile);
   const pathToImageFile = path.join(tmpFolder, folderForAssets, downloadedImgName);
   const pathToCssFile = path.join(tmpFolder, folderForAssets, downloadedCssName);
   const downloadedPage = await fsMz.readFileSync(pathToFile, 'utf8');
@@ -59,16 +58,19 @@ test('not existing directory', async () => {
   const nockPage = await fsMz.readFile(path.join(fixturesPath, 'testPage.html'), 'utf8');
   const testImage = await fsMz.readFile(path.join(fixturesPath, imagePath), 'utf8');
   const testCssFile = await fsMz.readFile(path.join(fixturesPath, cssPath), 'utf8');
+  const tmpFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'bar-'));
+  const fullWrongDir = path.join(tmpFolder, wrongDir);
+  const expectedDir = path.join(tmpFolder, wrongDir, folderForAssets);
 
   nock(host).get('/').reply(200, nockPage);
   nock(host).get(imagePath).reply(200, testImage);
   nock(host).get(cssPath).reply(200, testCssFile);
 
   try {
-    await saveData(wrongDir, host);
+    await saveData(fullWrongDir, host);
     expect(false).toBe(true);
   } catch (e) {
     console.log(e.message);
-    expect(e.message).toMatch("ENOENT: no such file or directory, mkdir '/Users/yarik/Programming/hexlet-project-3-back/someFolder/fake-com_files'");
+    expect(e.message).toMatch(`ENOENT: no such file or directory, mkdir '${expectedDir}'`);
   }
 });
