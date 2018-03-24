@@ -7,12 +7,10 @@ import debug from 'debug';
 
 const logDebug = debug('page-loader');
 
-logDebug('debug is working');
-
 const attrMapping = {
   script: {
     name: 'src',
-    isSuitable: pathname => !pathname.includes('//'),
+    isSuitable: (pathname, el, data) => !pathname.includes('//') && data(el).attr('src'),
   },
   link: {
     name: 'href',
@@ -20,7 +18,7 @@ const attrMapping = {
   },
   img: {
     name: 'src',
-    isSuitable: () => true,
+    isSuitable: (pathname, el, data) => data(el).attr('src'),
   },
 };
 
@@ -40,11 +38,17 @@ const makeName = (urlName, endOfName) => {
 
 const isAttrLinkInternal = (el, data, hostname) => {
   const targetAttr = attrMapping[el.name].name;
+  if (!data(el).attr(targetAttr)) {
+    return false;
+  }
   const pathnameToCheck = url.parse(data(el).attr(targetAttr)).pathname;
   if (attrMapping[el.name].isSuitable(pathnameToCheck, el, data)) {
+    logDebug('suitable url %s', pathnameToCheck);
     const attrUrlObj = url.parse(data(el).attr(targetAttr));
     const attrHostname = attrUrlObj.hostname;
-    return !attrHostname || attrHostname === hostname;
+    if (!attrHostname || attrHostname === hostname) {
+      return true;
+    }
   }
   return false;
 };
@@ -73,6 +77,7 @@ const parseHtml = (data, urlObj, assetsFolder) => {
     const { fileName } = findLink($, el, urlObj);
     $(el).attr(attribute, `${assetsFolder}/${fileName}`);
   });
+  logDebug('parsed html');
   return $.html();
 };
 
@@ -87,6 +92,7 @@ const makePromisesArr = (html, urlObj, assetsPath) => {
       method: 'get',
     }).then(response => fs.writeFile(path.join(assetsPath, fileName), response.data));
   });
+  logDebug('made promises arr from filtered elements');
   return promises.toArray();
 };
 
@@ -97,17 +103,19 @@ const saveData = (folder, adress) => {
   const pathToMainFile = path.resolve(folder, makeName(adress, '.html'));
   const pathToAssets = path.resolve(folder, folderAssetsName);
   const urlObj = url.parse(adress);
-  logDebug('just to test');
+  logDebug('begin of async tasks');
   return axios.get(adress)
     .then((response) => {
       const { data } = response;
+      logDebug('received html from %s', adress);
       assetsPromises = makePromisesArr(data, urlObj, pathToAssets);
       html = parseHtml(data, urlObj, folderAssetsName);
     })
     .then(() => fs.mkdir(pathToAssets))
     .then(() => Promise.all(assetsPromises))
     .then(() => fs.writeFile(pathToMainFile, html))
-    .catch(err => console.error(err));
+    .then(() => logDebug('programm ended succesfully'))
+    .catch(err => logDebug('programm ended with %o', err));
 };
 
 export default saveData;
