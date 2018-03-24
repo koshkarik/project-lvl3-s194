@@ -10,7 +10,7 @@ const logDebug = debug('page-loader');
 const attrMapping = {
   script: {
     name: 'src',
-    isSuitable: (pathname, el, data) => !pathname.includes('//') && data(el).attr('src'),
+    isSuitable: pathname => !pathname.includes('//'),
   },
   link: {
     name: 'href',
@@ -18,7 +18,7 @@ const attrMapping = {
   },
   img: {
     name: 'src',
-    isSuitable: (pathname, el, data) => data(el).attr('src'),
+    isSuitable: () => true,
   },
 };
 
