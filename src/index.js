@@ -4,6 +4,7 @@ import path from 'path';
 import cheerio from 'cheerio';
 import url from 'url';
 import debug from 'debug';
+import errno from 'errno';
 
 const logDebug = debug('page-loader');
 
@@ -20,6 +21,11 @@ const attrMapping = {
     name: 'src',
     isSuitable: () => true,
   },
+};
+
+const errmsg = (err) => {
+  const errorStr = !errno.errno[err.errno] ? err.message : errno.errno[err.errno].description;
+  return err.path ? `${errorStr} ['${err.path}']` : errorStr;
 };
 
 const makeAssetName = (urlAdress) => {
@@ -81,7 +87,7 @@ const parseHtml = (data, urlObj, assetsFolder) => {
   return $.html();
 };
 
-const makePromisesArr = (html, urlObj, assetsPath) => {
+const downloadAllAssets = (html, urlObj, assetsPath) => {
   const $ = cheerio.load(html);
   const elements = getAllFilteredElements($, urlObj.hostname);
   const promises = elements.map((ind, el) => {
@@ -90,7 +96,9 @@ const makePromisesArr = (html, urlObj, assetsPath) => {
       responseType: 'arraybuffer',
       url: adressToDownload,
       method: 'get',
-    }).then(response => fs.writeFile(path.join(assetsPath, fileName), response.data));
+    })
+      .then(response => fs.writeFile(path.join(assetsPath, fileName), response.data))
+      .catch(err => logDebug('failed to download file %o', err));
   });
   logDebug('made promises arr from filtered elements');
   return promises.toArray();
@@ -102,20 +110,28 @@ const saveData = (folder, adress) => {
   const folderAssetsName = makeName(adress, '_files');
   const pathToMainFile = path.resolve(folder, makeName(adress, '.html'));
   const pathToAssets = path.resolve(folder, folderAssetsName);
+  logDebug('path to assets %s', pathToAssets);
   const urlObj = url.parse(adress);
   logDebug('begin of async tasks');
   return axios.get(adress)
     .then((response) => {
       const { data } = response;
       logDebug('received html from %s', adress);
-      assetsPromises = makePromisesArr(data, urlObj, pathToAssets);
+      assetsPromises = downloadAllAssets(data, urlObj, pathToAssets);
       html = parseHtml(data, urlObj, folderAssetsName);
     })
     .then(() => fs.mkdir(pathToAssets))
     .then(() => Promise.all(assetsPromises))
     .then(() => fs.writeFile(pathToMainFile, html))
-    .then(() => logDebug('programm ended succesfully'))
-    .catch(err => logDebug('programm ended with %o', err));
+    .then(() => {
+      logDebug('programm ended succesfully');
+      console.log('Web page downloaded succesfully!');
+    })
+    .catch((err) => {
+      console.error(errmsg(err));
+      logDebug('programm ended with %o', err);
+      return Promise.reject(err);
+    });
 };
 
 export default saveData;

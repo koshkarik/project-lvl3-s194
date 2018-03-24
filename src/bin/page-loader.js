@@ -9,7 +9,9 @@ program
   .arguments('<urlAdress>')
   .description('Takes url adress and downloads page locally')
   .action((urlAdress) => {
-    saveData(program.output, urlAdress);
+    saveData(program.output, urlAdress)
+      .then(() => process.exit(0))
+      .catch(() => process.exit(1));
   })
   .parse(process.argv);
 
