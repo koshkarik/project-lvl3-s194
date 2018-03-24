@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import program from 'commander';
-import saveData from '..';
+import saveData, { errmsg } from '..';
 
 program
   .version('0.1.0')
@@ -10,8 +10,10 @@ program
   .description('Takes url adress and downloads page locally')
   .action((urlAdress) => {
     saveData(program.output, urlAdress)
-      .then(() => process.exit(0))
-      .catch(() => process.exit(1));
+      .catch((err) => {
+        console.log(errmsg(err));
+        process.exit(1);
+      });
   })
   .parse(process.argv);
 

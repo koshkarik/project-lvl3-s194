@@ -5,6 +5,7 @@ import cheerio from 'cheerio';
 import url from 'url';
 import debug from 'debug';
 import errno from 'errno';
+import Listr from 'listr';
 
 const logDebug = debug('page-loader');
 
@@ -23,7 +24,7 @@ const attrMapping = {
   },
 };
 
-const errmsg = (err) => {
+export const errmsg = (err) => {
   const errorStr = !errno.errno[err.errno] ? err.message : errno.errno[err.errno].description;
   return err.path ? `${errorStr} ['${err.path}']` : errorStr;
 };
@@ -52,9 +53,7 @@ const isAttrLinkInternal = (el, data, hostname) => {
     logDebug('suitable url %s', pathnameToCheck);
     const attrUrlObj = url.parse(data(el).attr(targetAttr));
     const attrHostname = attrUrlObj.hostname;
-    if (!attrHostname || attrHostname === hostname) {
-      return true;
-    }
+    return !attrHostname || attrHostname === hostname;
   }
   return false;
 };
@@ -68,8 +67,9 @@ const getAllFilteredElements = ($, hostname) => {
 const findLink = ($, element, { protocol, hostname }) => {
   const targetAttr = attrMapping[element.name].name;
   const urlAdress = $(element).attr(targetAttr);
+  const fixedAdress = urlAdress[0] === '/' ? urlAdress.substring(1) : urlAdress;
   const host = url.parse(urlAdress).hostname;
-  const adressToDownload = !host ? `${protocol}//${hostname}/${urlAdress}` : urlAdress;
+  const adressToDownload = !host ? `${protocol}//${hostname}/${fixedAdress}` : urlAdress;
   const fileName = makeAssetName(adressToDownload);
   return { adressToDownload, fileName };
 };
@@ -92,13 +92,17 @@ const downloadAllAssets = (html, urlObj, assetsPath) => {
   const elements = getAllFilteredElements($, urlObj.hostname);
   const promises = elements.map((ind, el) => {
     const { adressToDownload, fileName } = findLink($, el, urlObj);
-    return axios.request({
-      responseType: 'arraybuffer',
-      url: adressToDownload,
-      method: 'get',
-    })
-      .then(response => fs.writeFile(path.join(assetsPath, fileName), response.data))
-      .catch(err => logDebug('failed to download file %o', err));
+    const tasks = new Listr([{
+      title: adressToDownload,
+      task: () => axios.request({
+        responseType: 'arraybuffer',
+        url: adressToDownload,
+        method: 'get',
+      })
+        .then(response => fs.writeFile(path.join(assetsPath, fileName), response.data))
+        .catch(err => console.error(errmsg(err))),
+    }]);
+    return tasks.run();
   });
   logDebug('made promises arr from filtered elements');
   return promises.toArray();
@@ -126,7 +130,6 @@ const saveData = (folder, adress) => {
       console.log('Web page downloaded succesfully!');
     })
     .catch((err) => {
-      console.error(errmsg(err));
       logDebug('programm ended with %o', err);
       return Promise.reject(err);
     });
