@@ -3,6 +3,26 @@ import fs from 'mz/fs';
 import path from 'path';
 import cheerio from 'cheerio';
 import url from 'url';
+import debug from 'debug';
+
+const logDebug = debug('page-loader');
+
+logDebug('debug is working');
+
+const attrMapping = {
+  script: {
+    name: 'src',
+    isSuitable: pathname => !pathname.includes('//'),
+  },
+  link: {
+    name: 'href',
+    isSuitable: (pathname, el, data) => !pathname.includes('//') && data(el).attr('rel') === 'stylesheet',
+  },
+  img: {
+    name: 'src',
+    isSuitable: () => true,
+  },
+};
 
 const makeAssetName = (urlAdress) => {
   const { pathname } = url.parse(urlAdress);
@@ -18,58 +38,75 @@ const makeName = (urlName, endOfName) => {
   return fullName.replace(/[^a-zA-Z0-9]+/g, '-').concat(endOfName);
 };
 
-const decideElsToDownload = (el, data, hostname) => {
-  const pathnameToCheck = (data(el)).attr('href') ? url.parse(data(el).attr('href')).pathname
-    : url.parse(data(el).attr('src')).pathname;
-  if ((data(el).attr('href') && data(el).attr('rel') === 'stylesheet' && !pathnameToCheck.includes('//'))
-   || (data(el).attr('src') && !pathnameToCheck.includes('//'))) {
-    const targetAttr = data(el).attr('href') ? 'href' : 'src';
+const isAttrLinkInternal = (el, data, hostname) => {
+  const targetAttr = attrMapping[el.name].name;
+  const pathnameToCheck = url.parse(data(el).attr(targetAttr)).pathname;
+  if (attrMapping[el.name].isSuitable(pathnameToCheck, el, data)) {
     const attrUrlObj = url.parse(data(el).attr(targetAttr));
     const attrHostname = attrUrlObj.hostname;
-    if (!attrHostname || attrHostname === hostname) {
-      return true;
-    }
+    return !attrHostname || attrHostname === hostname;
   }
   return false;
 };
 
-const handleTagsPushPromises =
-  ($, elems, pathToAssetsFolder, promisesArr, protocol, hostname, assetsFolder) => {
-    elems.each((ind, el) => {
-      const targetAttr = $(el).attr('href') ? 'href' : 'src';
-      const target = $(el).attr(targetAttr);
-      const host = url.parse(target).hostname;
-      const adressToDownload = !host ? protocol.concat(`//${hostname}/${target}`) : target;
-      const fileName = makeAssetName(adressToDownload);
-      $(el).attr(targetAttr, assetsFolder.concat(`/${fileName}`));
-      promisesArr.push(axios.request({
-        responseType: 'arraybuffer',
-        url: adressToDownload,
-        method: 'get',
-      }).then(response => fs.writeFile(path.join(pathToAssetsFolder, fileName), response.data)));
-    });
-  };
+const getAllFilteredElements = ($, hostname) => {
+  const elements = Object.keys(attrMapping).reduce((cur, acc) => `${acc}, ${cur}`);
+  const targetElems = $(elements);
+  return targetElems.filter((index, el) => isAttrLinkInternal(el, $, hostname));
+};
 
-const makeFolder = pathToAssetsFolder => fs.mkdir(pathToAssetsFolder);
+const findLink = ($, element, { protocol, hostname }) => {
+  const targetAttr = attrMapping[element.name].name;
+  const urlAdress = $(element).attr(targetAttr);
+  const host = url.parse(urlAdress).hostname;
+  const adressToDownload = !host ? `${protocol}//${hostname}/${urlAdress}` : urlAdress;
+  const fileName = makeAssetName(adressToDownload);
+  return { adressToDownload, fileName };
+};
+
+
+const parseHtml = (data, urlObj, assetsFolder) => {
+  const $ = cheerio.load(data);
+  const elemsToCheck = getAllFilteredElements($, urlObj.hostname);
+  elemsToCheck.each((ind, el) => {
+    const attribute = attrMapping[el.name].name;
+    const { fileName } = findLink($, el, urlObj);
+    $(el).attr(attribute, `${assetsFolder}/${fileName}`);
+  });
+  return $.html();
+};
+
+const makePromisesArr = (html, urlObj, assetsPath) => {
+  const $ = cheerio.load(html);
+  const elements = getAllFilteredElements($, urlObj.hostname);
+  const promises = elements.map((ind, el) => {
+    const { adressToDownload, fileName } = findLink($, el, urlObj);
+    return axios.request({
+      responseType: 'arraybuffer',
+      url: adressToDownload,
+      method: 'get',
+    }).then(response => fs.writeFile(path.join(assetsPath, fileName), response.data));
+  });
+  return promises.toArray();
+};
 
 const saveData = (folder, adress) => {
-  let newdata = '';
-  const assetsPromises = [];
+  let html;
+  let assetsPromises;
   const folderAssetsName = makeName(adress, '_files');
   const pathToMainFile = path.resolve(folder, makeName(adress, '.html'));
   const pathToAssets = path.resolve(folder, folderAssetsName);
-  const { hostname, protocol } = url.parse(adress);
+  const urlObj = url.parse(adress);
+  logDebug('just to test');
   return axios.get(adress)
     .then((response) => {
-      const $ = cheerio.load(response.data);
-      const targetElems = $('img, link, script[src]');
-      const newTargets = targetElems.filter((index, el) => decideElsToDownload(el, $, hostname));
-      handleTagsPushPromises($, newTargets, pathToAssets, assetsPromises, protocol, hostname, folderAssetsName); // eslint-disable-line
-      newdata = $.html();
+      const { data } = response;
+      assetsPromises = makePromisesArr(data, urlObj, pathToAssets);
+      html = parseHtml(data, urlObj, folderAssetsName);
     })
-    .then(makeFolder(pathToAssets))
+    .then(() => fs.mkdir(pathToAssets))
     .then(() => Promise.all(assetsPromises))
-    .then(() => fs.writeFile(pathToMainFile, newdata))
+    .then(() => fs.writeFile(pathToMainFile, html))
     .catch(err => console.error(err));
 };
 
