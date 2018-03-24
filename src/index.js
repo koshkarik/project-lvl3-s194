@@ -112,7 +112,6 @@ const saveData = (folder, adress) => {
   const pathToAssets = path.resolve(folder, folderAssetsName);
   logDebug('path to assets %s', pathToAssets);
   const urlObj = url.parse(adress);
-  logDebug('begin of async tasks');
   return axios.get(adress)
     .then((response) => {
       const { data } = response;
@@ -124,7 +123,6 @@ const saveData = (folder, adress) => {
     .then(() => Promise.all(assetsPromises))
     .then(() => fs.writeFile(pathToMainFile, html))
     .then(() => {
-      logDebug('programm ended succesfully');
       console.log('Web page downloaded succesfully!');
     })
     .catch((err) => {
