@@ -128,7 +128,7 @@ const saveData = (folder, adress) => {
     .then(() => Promise.all(assetsPromises))
     .then(() => fs.writeFile(pathToMainFile, html))
     .then(() => {
-      console.log(chalk.green('Web page downloaded succesfully!'));
+      console.log(chalk.bold.green('Web page downloaded succesfully!'));
     })
     .catch((err) => {
       logDebug('programm ended with %o', err);
