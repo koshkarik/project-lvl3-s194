@@ -6,6 +6,7 @@ import url from 'url';
 import debug from 'debug';
 import errno from 'errno';
 import Listr from 'listr';
+import chalk from 'chalk';
 
 const logDebug = debug('page-loader');
 
@@ -26,7 +27,7 @@ const attrMapping = {
 
 export const errmsg = (err) => {
   const errorStr = !errno.errno[err.errno] ? err.message : errno.errno[err.errno].description;
-  return err.path ? `${errorStr} ['${err.path}']` : errorStr;
+  return err.path && errno.errno[err.errno] ? `${errorStr} ['${err.path}']` : errorStr;
 };
 
 const makeAssetName = (urlAdress) => {
@@ -127,7 +128,7 @@ const saveData = (folder, adress) => {
     .then(() => Promise.all(assetsPromises))
     .then(() => fs.writeFile(pathToMainFile, html))
     .then(() => {
-      console.log('Web page downloaded succesfully!');
+      console.log(chalk.green('Web page downloaded succesfully!'));
     })
     .catch((err) => {
       logDebug('programm ended with %o', err);
