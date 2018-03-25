@@ -70,7 +70,6 @@ test('not existing directory', async () => {
     await saveData(fullWrongDir, host);
     expect(false).toBe(true);
   } catch (e) {
-    console.log(e.message);
     expect(e.message).toMatch(`ENOENT: no such file or directory, mkdir '${expectedDir}'`);
   }
 });
